@@ -17161,6 +17161,7 @@ Putting 1 is equivalent to putting 0 and calling Ln() just after. Default value:
 					}
 					++$key;
 				}
+				continue;
 			}
 			if ($dom[$key]['tag'] AND isset($dom[$key]['attribute']['pagebreak'])) {
 				// check for pagebreak
