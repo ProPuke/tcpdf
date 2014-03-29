@@ -16205,7 +16205,7 @@ class TCPDF {
 		$css = array();
 		// get CSS array defined at previous call
 		$matches = array();
-		if (preg_match_all('/<cssarray>([^\<]*)<\/cssarray>/isU', $html, $matches) > 0) {
+		if (preg_match_all('/<cssarray>(.*?)<\/cssarray>/isU', $html, $matches) > 0) {
 			if (isset($matches[1][0])) {
 				$css = array_merge($css, unserialize($this->unhtmlentities($matches[1][0])));
 			}
@@ -16216,14 +16216,25 @@ class TCPDF {
 		if (preg_match_all('/<link([^\>]*)>/isU', $html, $matches) > 0) {
 			foreach ($matches[1] as $key => $link) {
 				$type = array();
-				if (preg_match('/type[\s]*=[\s]*"text\/css"/', $link, $type)) {
-					$type = array();
-					preg_match('/media[\s]*=[\s]*"([^"]*)"/', $link, $type);
+				preg_match('/\\btype[\s]*=[\s]*"([^"]*)"/isU', $link, $type);
+
+				if (empty($type)) {
+					$rel = array();
+					preg_match('/\\brel[\s]*=[\s]*"([^"]*)"/isU', $link, $rel);
+					if (empty($rel) OR $rel[1]=='stylesheet'){
+						$type = 'text/css';
+					}
+				} else {
+					$type = $type[1];
+				}
+
+				if ( $type == 'text/css') {
+					preg_match('/\\bmedia[\s]*=[\s]*"([^"]*)"/isU', $link, $type);
 					// get 'all' and 'print' media, other media types are discarded
 					// (all, braille, embossed, handheld, print, projection, screen, speech, tty, tv)
 					if (empty($type) OR (isset($type[1]) AND (($type[1] == 'all') OR ($type[1] == 'print')))) {
 						$type = array();
-						if (preg_match('/href[\s]*=[\s]*"([^"]*)"/', $link, $type) > 0) {
+						if (preg_match('/\\bhref[\s]*=[\s]*"([^"]*)"/', $link, $type) > 0) {
 							// read CSS data file
 							$cssdata = TCPDF_STATIC::fileGetContents(trim($type[1]));
 							if (($cssdata !== FALSE) AND (strlen($cssdata) > 0)) {
@@ -16239,7 +16250,7 @@ class TCPDF {
 		if (preg_match_all('/<style([^\>]*)>([^\<]*)<\/style>/isU', $html, $matches) > 0) {
 			foreach ($matches[1] as $key => $media) {
 				$type = array();
-				preg_match('/media[\s]*=[\s]*"([^"]*)"/', $media, $type);
+				preg_match('/\\bmedia[\s]*=[\s]*"([^"]*)"/', $media, $type);
 				// get 'all' and 'print' media, other media types are discarded
 				// (all, braille, embossed, handheld, print, projection, screen, speech, tty, tv)
 				if (empty($type) OR (isset($type[1]) AND (($type[1] == 'all') OR ($type[1] == 'print')))) {
