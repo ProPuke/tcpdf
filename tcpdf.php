@@ -119,6 +119,8 @@ require_once(dirname(__FILE__).'/include/tcpdf_colors.php');
 require_once(dirname(__FILE__).'/include/tcpdf_images.php');
 // TCPDF static methods and data
 require_once(dirname(__FILE__).'/include/tcpdf_static.php');
+// TCPDF css lookups
+require_once(dirname(__FILE__).'/include/tcpdf_stylesheet.php');
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -346,6 +348,12 @@ class TCPDF {
 	 * @protected
 	 */
 	protected $cached_files = array();
+
+	/**
+	 * Array of cached stylesheets.
+	 * @protected
+	 */
+	protected $cached_stylesheet = array();
 
 	/**
 	 * Array of Annotations in pages.
@@ -16202,13 +16210,12 @@ class TCPDF {
 	 */
 	protected function getHtmlDomArray($html) {
 		// array of CSS styles ( selector => properties).
-		$css = array();
+		$css = new TCPDFStylesheet;
 		// get CSS array defined at previous call
 		$matches = array();
 		if (preg_match_all('/<cssarray>(.*?)<\/cssarray>/isU', $html, $matches) > 0) {
-			if (isset($matches[1][0])) {
-				$css = array_merge($css, unserialize($this->unhtmlentities($matches[1][0])));
-			}
+			$css_index = intval($matches[1][0]);
+			$css = $this->cached_stylesheet[$css_index];
 			$html = preg_replace('/<cssarray>(.*?)<\/cssarray>/isU', '', $html);
 		}
 		// extract external CSS files
@@ -16238,7 +16245,7 @@ class TCPDF {
 							// read CSS data file
 							$cssdata = TCPDF_STATIC::fileGetContents(trim($type[1]));
 							if (($cssdata !== FALSE) AND (strlen($cssdata) > 0)) {
-								$css = array_merge($css, TCPDF_STATIC::extractCSSproperties($cssdata));
+								$css->add_css($cssdata);
 							}
 						}
 					}
@@ -16255,12 +16262,14 @@ class TCPDF {
 				// (all, braille, embossed, handheld, print, projection, screen, speech, tty, tv)
 				if (empty($type) OR (isset($type[1]) AND (($type[1] == 'all') OR ($type[1] == 'print')))) {
 					$cssdata = $matches[2][$key];
-					$css = array_merge($css, TCPDF_STATIC::extractCSSproperties($cssdata));
+					$css->add_css($cssdata);
 				}
 			}
 		}
 		// create a special tag to contain the CSS array (used for table content)
-		$csstagarray = '<cssarray>'.htmlentities(serialize($css)).'</cssarray>';
+		$this->cached_stylesheet[] = $css;
+		end($this->cached_stylesheet);
+		$csstagarray = '<cssarray>'.key($this->cached_stylesheet).'</cssarray>';
 		// remove head and style blocks
 		$html = preg_replace('/<head([^\>]*)>(.*?)<\/head>/siU', '', $html);
 		$html = preg_replace('/<style([^\>]*)>([^\<]*)<\/style>/isU', '', $html);
@@ -16517,9 +16526,9 @@ class TCPDF {
 					while (list($id, $name) = each($attr_array[1])) {
 						$dom[$key]['attribute'][strtolower($name)] = $attr_array[2][$id];
 					}
-					if (!empty($css)) {
+					if (!$css->is_empty()) {
 						// merge CSS style to current style
-						list($dom[$key]['csssel'], $dom[$key]['cssdata']) = TCPDF_STATIC::getCSSdataArray($dom, $key, $css);
+						list($dom[$key]['csssel'], $dom[$key]['cssdata']) = $css->getCSSdataArray($dom, $key);
 						$dom[$key]['attribute']['style'] = TCPDF_STATIC::getTagStyleFromCSSarray($dom[$key]['cssdata']);
 					}
 					// split style attributes
