@@ -2218,7 +2218,7 @@ class TCPDF_STATIC {
 										case '|=': {
 											if ($dom[$key]['attribute'][$att] == $val) {
 												$valid = true;
-											} elseif (preg_match('/'.$val.'[\-]{1}/i', $dom[$key]['attribute'][$att]) > 0) {
+											} elseif (preg_match('/'.preg_quote($val).'[\-]{1}/i', $dom[$key]['attribute'][$att]) > 0) {
 												$valid = true;
 											}
 											break;
@@ -2357,7 +2357,7 @@ class TCPDF_STATIC {
 						$cmd = substr($cmd, 0, ($pos + 1));
 						if (strpos($tagstyle, $cmd) !== false) {
 							// remove duplicate commands (last commands have high priority)
-							$tagstyle = preg_replace('/'.$cmd.'[^;]+/i', '', $tagstyle);
+							$tagstyle = preg_replace('/'.preg_quote($cmd).'[^;]+/i', '', $tagstyle);
 						}
 					}
 				}
