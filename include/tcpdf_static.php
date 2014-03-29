@@ -2067,8 +2067,6 @@ class TCPDF_STATIC {
 				}
 			}
 		}
-		// sort selectors alphabetically to account for specificity
-		ksort($cssdata, SORT_STRING);
 		// return array
 		return $cssdata;
 	}

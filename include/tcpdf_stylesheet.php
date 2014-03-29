@@ -22,20 +22,20 @@ class TCPDFStylesheet {
 				$id = $match[1];
 				if (!isset($this->list_id[$id])){
 					$this->list_id[$id] = array();
-					$list = &$this->list_id[$id];
 				}
+				$list = &$this->list_id[$id];
 			} else if (preg_match('/\.([\w-]*)(\[[^\]]+\])*(::?[\w-]+)*$/s', $selector, $match)){
 				$class = $match[1];
 				if (!isset($this->list_class[$class])){
 					$this->list_class[$class] = array();
-					$list = &$this->list_class[$class];
 				}
+				$list = &$this->list_class[$class];
 			} else if (preg_match('/[\>\+\~\s]([\w]+)(\[[^\]]+\])*(::?[\w-]+)*$/', $selector, $match) ){
 				$tag = $match[1];
 				if (!isset($this->list_tag[$tag])){
 					$this->list_tag[$tag] = array();
-					$list = &$this->list_tag[$tag];
 				}
+				$list = &$this->list_tag[$tag];
 			} else {
 				$list = &$this->list_general;
 			}
@@ -64,18 +64,18 @@ class TCPDFStylesheet {
 
 		$search_list = function($css) use ($dom, $key, &$cssarray, &$selectors) {
 			// get all styles that apply
-			foreach($css as $selector => $style) {
-				$pos = strpos($selector, ' ');
+			foreach($css as $selectorkey => $style) {
+				$pos = strpos($selectorkey, ' ');
 				// get specificity
-				$specificity = substr($selector, 0, $pos);
-				// remove specificity
-				$selector = substr($selector, $pos);
+				$specificity = substr($selectorkey, 0, $pos);
+				// get selector
+				$selector = substr($selectorkey, $pos);
 				// add style if not already added on parent selector
-				if (!in_array($selector, $selectors)) {
+				if (!in_array($selectorkey, $selectors)) {
 					// check if this selector apply to current tag
 					if (TCPDF_STATIC::isValidCSSSelectorForTag($dom, $key, $selector)) {
 						$cssarray[] = array('k' => $selector, 's' => $specificity, 'c' => $style);
-						$selectors[] = $selector;
+						$selectors[] = $selectorkey;
 					}
 				}
 			}
