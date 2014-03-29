@@ -81,6 +81,8 @@ class TCPDFStylesheet {
 			}
 		};
 
+		$search_list($this->list_general);
+
 		$tag = $node['value'];
 		if (isset($this->list_tag[$tag])) {
 			$search_list($this->list_tag[$tag]);
