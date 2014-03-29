@@ -106,7 +106,22 @@ class TCPDFStylesheet {
 
 		if (isset($node['attribute']['style'])) {
 			// attach inline style (latest properties have high priority)
-			$cssarray[] = array('k' => '', 's' => '1000', 'c' => $node['attribute']['style']);
+			
+			$style = $node['attribute']['style'];
+			if (stripos($style,'!important')!==false) {
+				$style_important = preg_replace('/(^|;)((?!\\!important).)*(;\\n?|$)/sui','$1',$style);
+				$style_important = preg_replace('/\s*!important\b/sui','',$style_important);
+				$style = preg_replace('/[^;]*!important\s*(;\\n?|$)/sui','',$style);
+			} else {
+				$style_important = false;
+			}
+
+			if ($style) {
+				$cssarray[] = array('k' => '', 's' => '1000', 'c' => $style);
+			}
+			if ($style_important !== false) {
+				$cssarray[] = array('k' => '', 's' => '1001000', 'c' => $style_important);
+			}
 		}
 		// order the css array to account for specificity
 		$cssordered = array();

@@ -2034,6 +2034,16 @@ class TCPDF_STATIC {
 				// split groups of selectors (comma-separated list of selectors)
 				$selectors = explode(',', $block[0]);
 				$block = $block[1];
+
+				// seperate important rules
+				if (stripos($block,'!important')!==false) {
+					$block_important = preg_replace('/(^|;)((?!\\!important).)*(;\\n?|$)/sui','$1',$block);
+					$block_important = preg_replace('/\s*!important\b/sui','',$block_important);
+					$block = preg_replace('/[^;]*!important\s*(;\\n?|$)/sui','',$block);
+				} else {
+					$block_important = false;
+				}
+
 				foreach ($selectors as $selector) {
 					$selector = trim($selector);
 
@@ -2046,8 +2056,14 @@ class TCPDF_STATIC {
 					$d = intval(preg_match_all('/[\>\+\~\s]{1}[a-zA-Z0-9]+/', ' '.$selector, $matches)); // number of element names
 					$d += intval(preg_match_all('/[\:][\:]/', $selector, $matches)); // number of pseudo-elements
 					$specificity = $a.$b.$c.$d;
-					// add specificity to the beginning of the selector
+
+					if ($block) {
 					$cssdata[$specificity.' '.$selector] = $block;
+					}
+
+					if ($block_important !== false) {
+						$cssdata['100'.$specificity.' '.$selector] = $block_important;
+					}
 				}
 			}
 		}
