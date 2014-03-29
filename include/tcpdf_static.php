@@ -1983,7 +1983,7 @@ class TCPDF_STATIC {
 			return array();
 		}
 		// remove comments
-		$cssdata = preg_replace('/\/\*[^\*]*\*\//', '', $cssdata);
+		$cssdata = preg_replace('/\/\*(.(?!\*\/))*.?\*\//s', '', $cssdata);
 		// remove newlines and multiple spaces
 		$cssdata = preg_replace('/[\s]+/', ' ', $cssdata);
 		// remove some spaces
