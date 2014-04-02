@@ -310,7 +310,7 @@ class TCPDF_COLORS {
 		} elseif ((substr($color, 0, 4) != 'cmyk') AND ($dotpos = strpos($color, '.')) !== false) {
 			// remove class parent (i.e.: color.red)
 			$color = substr($color, ($dotpos + 1));
-			if ($color == 'transparent') {
+			if ($color == 'transparent' || $color == 'none') {
 				// transparent (empty array)
 				return array();
 			}
