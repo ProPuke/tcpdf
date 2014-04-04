@@ -16547,7 +16547,20 @@ class TCPDF {
 						}
 						// display
 						if (isset($dom[$key]['style']['display'])) {
-							$dom[$key]['hide'] = (trim(strtolower($dom[$key]['style']['display'])) == 'none');
+							$display = trim(strtolower($dom[$key]['style']['display']));
+							switch($display){
+								case 'none':
+									$dom[$key]['hide'] = true;
+								break;
+								case 'block':
+									$dom[$key]['hide'] = false;
+									$dom[$key]['block'] = true;
+								break;
+								case 'inline':
+									$dom[$key]['hide'] = false;
+									$dom[$key]['block'] = false;
+								break;
+							}
 						}
 						// font family
 						if (isset($dom[$key]['style']['font-family'])) {
@@ -16601,10 +16614,12 @@ class TCPDF {
 										// convert to percentage of font height
 										$lineheight = ($lineheight * 100).'%';
 									}
-									$dom[$key]['line-height'] = $this->getHTMLUnitToUnits($lineheight, 1, '%', true);
+									$fsize = $dom[$key]['fontsize']);
+									$dom[$key]['line-height'] = $this->getHTMLUnitToUnits($lineheight, $fsize, '%', true);
 									if (substr($lineheight, -1) !== '%') {
-										$dom[$key]['line-height'] = (($dom[$key]['line-height'] - $this->cell_padding['T'] - $this->cell_padding['B']) / $dom[$key]['fontsize']);
+										$dom[$key]['line-height'] -= $this->cell_padding['T'] + $this->cell_padding['B'];
 									}
+									$dom[$key]['line-height'] /= $fsize;
 								}
 							}
 						}
@@ -18615,7 +18630,7 @@ Putting 1 is equivalent to putting 0 and calling Ln() just after. Default value:
 	 */
 	protected function openHTMLTagHandler($dom, $key, $cell) {
 		$tag = $dom[$key];
-		$parent = $dom[($dom[$key]['parent'])];
+		$parent = $dom[$tag['parent']];
 		$firsttag = ($key == 1);
 		// check for text direction attribute
 		if (isset($tag['dir'])) {
@@ -18623,9 +18638,10 @@ Putting 1 is equivalent to putting 0 and calling Ln() just after. Default value:
 		} else {
 			$this->tmprtl = false;
 		}
+		$hbz = 0; // distance from y to line bottom
+		$hb = 0; // vertical space between block tags
 		if ($tag['block']) {
-			$hbz = 0; // distance from y to line bottom
-			$hb = 0; // vertical space between block tags
+			$addspace = true;
 			// calculate vertical space for block tags
 			if (isset($this->tagvspaces[$tag['value']][0]['h']) AND ($this->tagvspaces[$tag['value']][0]['h'] >= 0)) {
 				$cur_h = $this->tagvspaces[$tag['value']][0]['h'];
@@ -18653,12 +18669,92 @@ Putting 1 is equivalent to putting 0 and calling Ln() just after. Default value:
 					$hbz = $this->getCellHeight($this->FontSize);
 				}
 			}
-			if (isset($dom[($key - 1)]) AND ($dom[($key - 1)]['value'] == 'table')) {
-				// fix vertical space after table
+			if ($key !== $tag['parent'] && isset($dom[($key - 1)]) && $dom[($key - 1)]['block']) {
+				// fix vertical space after blocks
 				$hbz = 0;
 			}
+		} else {
+			$addspace = false;
 		}
-		// Opening tag
+
+		// Adjustments before space is added
+		switch($tag['value']) {
+			case 'table':
+			case 'tr':
+			case 'hr': {
+				$addspace = false;
+				break;
+			}
+			case 'dl': {
+				++$this->listnum;
+				if ($this->listnum != 1) {
+					$hbz = 0;
+					$hb = 0;
+				}
+				break;
+			}
+			case 'dd': {
+				if ($this->rtl) {
+					$this->rMargin += $this->listindent;
+				} else {
+					$this->lMargin += $this->listindent;
+				}
+				++$this->listindentlevel;
+				break;
+			}
+			case 'ul':
+			case 'ol': {
+				++$this->listnum;
+				if ($tag['value'] == 'ol') {
+					$this->listordered[$this->listnum] = true;
+				} else {
+					$this->listordered[$this->listnum] = false;
+				}
+				if (isset($tag['attribute']['start'])) {
+					$this->listcount[$this->listnum] = intval($tag['attribute']['start']) - 1;
+				} else {
+					$this->listcount[$this->listnum] = 0;
+				}
+				if ($this->rtl) {
+					$this->rMargin += $this->listindent;
+					$this->x -= $this->listindent;
+				} else {
+					$this->lMargin += $this->listindent;
+					$this->x += $this->listindent;
+				}
+				++$this->listindentlevel;
+				if ($this->listnum == 1) {
+					if ($key <= 1) {
+						$addspace = false;
+					}
+				} else {
+					$hbz = 0;
+					$hb = 0;
+				}
+				break;
+			}
+			case 'li': {
+				if ($key <= 2) {
+					$addspace = false;
+				}
+				break;
+			}
+			case 'blockquote': {
+				if ($this->rtl) {
+					$this->rMargin += $this->listindent;
+				} else {
+					$this->lMargin += $this->listindent;
+				}
+				++$this->listindentlevel;
+				break;
+			}
+		}
+
+		if($addspace){
+			$this->addHTMLVertSpace($hbz, $hb, $cell, $firsttag);
+		}
+
+		// Actions after
 		switch($tag['value']) {
 			case 'table': {
 				$cp = 0;
@@ -18837,63 +18933,7 @@ Putting 1 is equivalent to putting 0 and calling Ln() just after. Default value:
 				}
 				break;
 			}
-			case 'dl': {
-				++$this->listnum;
-				if ($this->listnum == 1) {
-					$this->addHTMLVertSpace($hbz, $hb, $cell, $firsttag);
-				} else {
-					$this->addHTMLVertSpace(0, 0, $cell, $firsttag);
-				}
-				break;
-			}
-			case 'dt': {
-				$this->addHTMLVertSpace($hbz, $hb, $cell, $firsttag);
-				break;
-			}
-			case 'dd': {
-				if ($this->rtl) {
-					$this->rMargin += $this->listindent;
-				} else {
-					$this->lMargin += $this->listindent;
-				}
-				++$this->listindentlevel;
-				$this->addHTMLVertSpace($hbz, $hb, $cell, $firsttag);
-				break;
-			}
-			case 'ul':
-			case 'ol': {
-				++$this->listnum;
-				if ($tag['value'] == 'ol') {
-					$this->listordered[$this->listnum] = true;
-				} else {
-					$this->listordered[$this->listnum] = false;
-				}
-				if (isset($tag['attribute']['start'])) {
-					$this->listcount[$this->listnum] = intval($tag['attribute']['start']) - 1;
-				} else {
-					$this->listcount[$this->listnum] = 0;
-				}
-				if ($this->rtl) {
-					$this->rMargin += $this->listindent;
-					$this->x -= $this->listindent;
-				} else {
-					$this->lMargin += $this->listindent;
-					$this->x += $this->listindent;
-				}
-				++$this->listindentlevel;
-				if ($this->listnum == 1) {
-					if ($key > 1) {
-						$this->addHTMLVertSpace($hbz, $hb, $cell, $firsttag);
-					}
-				} else {
-					$this->addHTMLVertSpace(0, 0, $cell, $firsttag);
-				}
-				break;
-			}
 			case 'li': {
-				if ($key > 2) {
-					$this->addHTMLVertSpace($hbz, $hb, $cell, $firsttag);
-				}
 				if ($this->listordered[$this->listnum]) {
 					// ordered item
 					if (isset($parent['attribute']['type']) AND !TCPDF_STATIC::empty_string($parent['attribute']['type'])) {
@@ -18923,30 +18963,7 @@ Putting 1 is equivalent to putting 0 and calling Ln() just after. Default value:
 				}
 				break;
 			}
-			case 'blockquote': {
-				if ($this->rtl) {
-					$this->rMargin += $this->listindent;
-				} else {
-					$this->lMargin += $this->listindent;
-				}
-				++$this->listindentlevel;
-				$this->addHTMLVertSpace($hbz, $hb, $cell, $firsttag);
-				break;
-			}
-			case 'br': {
-				$this->addHTMLVertSpace($hbz, $hb, $cell, $firsttag);
-				break;
-			}
-			case 'div': {
-				$this->addHTMLVertSpace($hbz, $hb, $cell, $firsttag);
-				break;
-			}
-			case 'p': {
-				$this->addHTMLVertSpace($hbz, $hb, $cell, $firsttag);
-				break;
-			}
 			case 'pre': {
-				$this->addHTMLVertSpace($hbz, $hb, $cell, $firsttag);
 				$this->premode = true;
 				break;
 			}
@@ -18956,15 +18973,6 @@ Putting 1 is equivalent to putting 0 and calling Ln() just after. Default value:
 			}
 			case 'sub': {
 				$this->SetXY($this->GetX(), $this->GetY() + ((0.3 * $this->FontSizePt) / $this->k));
-				break;
-			}
-			case 'h1':
-			case 'h2':
-			case 'h3':
-			case 'h4':
-			case 'h5':
-			case 'h6': {
-				$this->addHTMLVertSpace($hbz, $hb, $cell, $firsttag);
 				break;
 			}
 			// Form fields (since 4.8.000 - 2009-09-07)
@@ -19275,9 +19283,10 @@ Putting 1 is equivalent to putting 0 and calling Ln() just after. Default value:
 		} else {
 			$xmax = 0;
 		}
+		$hbz = 0; // distance from y to line bottom
+		$hb = 0; // vertical space between block tags
 		if ($tag['block']) {
-			$hbz = 0; // distance from y to line bottom
-			$hb = 0; // vertical space between block tags
+			$addspace = true;
 			// calculate vertical space for block tags
 			if (isset($this->tagvspaces[$tag['value']][1]['h']) AND ($this->tagvspaces[$tag['value']][1]['h'] >= 0)) {
 				$pre_h = $this->tagvspaces[$tag['value']][1]['h'];
@@ -19303,8 +19312,87 @@ Putting 1 is equivalent to putting 0 and calling Ln() just after. Default value:
 			} elseif ($this->y < $maxbottomliney) {
 				$hbz = ($maxbottomliney - $this->y);
 			}
+		} else {
+			$addspace = false;
 		}
-		// Closing tag
+
+		// Adjustments before space is added
+		switch($tag['value']) {
+			case 'tr':
+			case 'tablehead':
+			case 'table': {
+				$addspace = false;
+				break;
+			}
+			case 'blockquote': {
+				if ($this->rtl) {
+					$this->rMargin -= $this->listindent;
+				} else {
+					$this->lMargin -= $this->listindent;
+				}
+				--$this->listindentlevel;
+				break;
+			}
+			case 'dl': {
+				--$this->listnum;
+				if ($this->listnum <= 0) {
+					$this->listnum = 0;
+				} else {
+					$hbz = 0;
+					$hb = 0;
+				}
+				$this->resetLastH();
+				break;
+			}
+			case 'dt': {
+				$this->lispacer = '';
+				$hbz = 0;
+				$hb = 0;
+				break;
+			}
+			case 'dd': {
+				$this->lispacer = '';
+				if ($this->rtl) {
+					$this->rMargin -= $this->listindent;
+				} else {
+					$this->lMargin -= $this->listindent;
+				}
+				--$this->listindentlevel;
+				$hbz = 0;
+				$hb = 0;
+				break;
+			}
+			case 'ul':
+			case 'ol': {
+				--$this->listnum;
+				$this->lispacer = '';
+				if ($this->rtl) {
+					$this->rMargin -= $this->listindent;
+				} else {
+					$this->lMargin -= $this->listindent;
+				}
+				--$this->listindentlevel;
+				if ($this->listnum <= 0) {
+					$this->listnum = 0;
+				} else {
+					$hbz = 0;
+					$hb = 0;
+				}
+				break;
+			}
+			case 'li': {
+				$this->lispacer = '';
+				$hbz = 0;
+				$hb = 0;
+				break;
+			}
+		}
+
+		if($addspace){
+			$this->addHTMLVertSpace($hbz, $hb, $cell, false, $lasttag);
+		}
+
+		// Actions after
 		switch($tag['value']) {
 			case 'tr': {
 				$table_el = $dom[($dom[$key]['parent'])]['parent'];
@@ -19678,87 +19766,17 @@ Putting 1 is equivalent to putting 0 and calling Ln() just after. Default value:
 				$this->SetXY($this->GetX(), $this->GetY() - ((0.3 * $parent['fontsize']) / $this->k));
 				break;
 			}
-			case 'div': {
-				$this->addHTMLVertSpace($hbz, $hb, $cell, false, $lasttag);
-				break;
-			}
-			case 'blockquote': {
-				if ($this->rtl) {
-					$this->rMargin -= $this->listindent;
-				} else {
-					$this->lMargin -= $this->listindent;
-				}
-				--$this->listindentlevel;
-				$this->addHTMLVertSpace($hbz, $hb, $cell, false, $lasttag);
-				break;
-			}
-			case 'p': {
-				$this->addHTMLVertSpace($hbz, $hb, $cell, false, $lasttag);
-				break;
-			}
 			case 'pre': {
-				$this->addHTMLVertSpace($hbz, $hb, $cell, false, $lasttag);
 				$this->premode = false;
 				break;
 			}
 			case 'dl': {
-				--$this->listnum;
-				if ($this->listnum <= 0) {
-					$this->listnum = 0;
-					$this->addHTMLVertSpace($hbz, $hb, $cell, false, $lasttag);
-				} else {
-					$this->addHTMLVertSpace(0, 0, $cell, false, $lasttag);
-				}
 				$this->resetLastH();
-				break;
-			}
-			case 'dt': {
-				$this->lispacer = '';
-				$this->addHTMLVertSpace(0, 0, $cell, false, $lasttag);
-				break;
-			}
-			case 'dd': {
-				$this->lispacer = '';
-				if ($this->rtl) {
-					$this->rMargin -= $this->listindent;
-				} else {
-					$this->lMargin -= $this->listindent;
-				}
-				--$this->listindentlevel;
-				$this->addHTMLVertSpace(0, 0, $cell, false, $lasttag);
 				break;
 			}
 			case 'ul':
 			case 'ol': {
-				--$this->listnum;
-				$this->lispacer = '';
-				if ($this->rtl) {
-					$this->rMargin -= $this->listindent;
-				} else {
-					$this->lMargin -= $this->listindent;
-				}
-				--$this->listindentlevel;
-				if ($this->listnum <= 0) {
-					$this->listnum = 0;
-					$this->addHTMLVertSpace($hbz, $hb, $cell, false, $lasttag);
-				} else {
-					$this->addHTMLVertSpace(0, 0, $cell, false, $lasttag);
-				}
 				$this->resetLastH();
-				break;
-			}
-			case 'li': {
-				$this->lispacer = '';
-				$this->addHTMLVertSpace(0, 0, $cell, false, $lasttag);
-				break;
-			}
-			case 'h1':
-			case 'h2':
-			case 'h3':
-			case 'h4':
-			case 'h5':
-			case 'h6': {
-				$this->addHTMLVertSpace($hbz, $hb, $cell, false, $lasttag);
 				break;
 			}
 			// Form fields (since 4.8.000 - 2009-09-07)
