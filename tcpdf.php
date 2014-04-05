@@ -16275,6 +16275,8 @@ class TCPDF {
 		$html = preg_replace('/<style([^\>]*)>([^\<]*)<\/style>/isU', '', $html);
 		// define block tags
 		$blocktags = array('blockquote','br','dd','dl','div','dt','h1','h2','h3','h4','h5','h6','hr','li','ol','p','pre','ul','tcpdf','table','tr','td');
+		// define uncollapsable
+		$uncollapsabletags = array('br','dd','dl','dt','hr','li','ol','pre','ul','tcpdf','table','thead','tbody','tfoot','tr','td','th');
 		// define self-closing tags
 		$selfclosingtags = array('area','base','basefont','br','hr','input','img','link','meta');
 		// remove all unsupported tags (the line below lists all supported tags)
@@ -16397,7 +16399,9 @@ class TCPDF {
 		$thead = false; // true when we are inside the THEAD tag
 		++$key;
 		$level = array();
+		$level_filled = array();
 		array_push($level, 0); // root
+		array_push($level_filled, false);
 		while ($elkey < $maxel) {
 			$dom[$key] = array();
 			$element = $a[$elkey];
@@ -16412,6 +16416,8 @@ class TCPDF {
 				if ($tagname == 'thead') {
 					if ($element{0} == '/') {
 						$thead = false;
+						array_pop($level_filled);
+						$level_filled[count($level_filled)-1] = true;
 					} else {
 						$thead = true;
 					}
@@ -16484,13 +16490,39 @@ class TCPDF {
 						$dom[($dom[$key]['parent'])]['thead'] = str_replace(' nobr="true"', '', $dom[($dom[$key]['parent'])]['thead']);
 						$dom[($dom[$key]['parent'])]['thead'] .= '</tablehead>';
 					}
+
+					// check if tag is empty and collapsable
+					if (!end($level_filled)) {
+						if (in_array($tagname, $uncollapsabletags)) {
+							$level_filled[count($level_filled)-1] = true;
+						} else {
+							// tag is empty, collapse it to 0 height if block, or delete it otherwise
+							if ($dom[$key]['block']) {
+								$dom[$key]['attribute']['height'] = 0;
+							} else {
+								unset($dom[$key]);
+								$key--;
+								unset($dom[$key]);
+								$key--;
+							}
+						}
+					}
+
+					if(array_pop($level_filled)&&count($level_filled)){
+						$level_filled[count($level_filled)-1] = true;
+					}
+
 				} else {
 					// *** opening or self-closing html tag
 					$dom[$key]['opening'] = true;
 					$dom[$key]['parent'] = end($level);
+					array_push($level_filled, false);
 					if ((substr($element, -1, 1) == '/') OR (in_array($dom[$key]['value'], $selfclosingtags))) {
 						// self-closing tag
 						$dom[$key]['self'] = true;
+						if(array_pop($level_filled)){
+							$level_filled[count($level_filled)-1] = true;
+						}
 					} else {
 						// opening tag
 						array_push($level, $key);
@@ -16614,7 +16646,7 @@ class TCPDF {
 										// convert to percentage of font height
 										$lineheight = ($lineheight * 100).'%';
 									}
-									$fsize = $dom[$key]['fontsize']);
+									$fsize = $dom[$key]['fontsize'];
 									$dom[$key]['line-height'] = $this->getHTMLUnitToUnits($lineheight, $fsize, '%', true);
 									if (substr($lineheight, -1) !== '%') {
 										$dom[$key]['line-height'] -= $this->cell_padding['T'] + $this->cell_padding['B'];
@@ -16823,105 +16855,121 @@ class TCPDF {
 							}
 						}
 					}
-					if (isset($dom[$key]['attribute']['display'])) {
-						$dom[$key]['hide'] = (trim(strtolower($dom[$key]['attribute']['display'])) == 'none');
-					}
 					if (isset($dom[$key]['attribute']['border']) AND ($dom[$key]['attribute']['border'] != 0)) {
 						$borderstyle = $this->getCSSBorderStyle($dom[$key]['attribute']['border'].' solid black');
 						if (!empty($borderstyle)) {
 							$dom[$key]['border']['LTRB'] = $borderstyle;
 						}
 					}
-					// check for font tag
-					if ($dom[$key]['value'] == 'font') {
-						// font family
-						if (isset($dom[$key]['attribute']['face'])) {
-							$dom[$key]['fontname'] = $this->getFontFamilyName($dom[$key]['attribute']['face']);
-						}
-						// font size
-						if (isset($dom[$key]['attribute']['size'])) {
-							if ($key > 0) {
-								if ($dom[$key]['attribute']['size']{0} == '+') {
-									$dom[$key]['fontsize'] = $dom[($dom[$key]['parent'])]['fontsize'] + intval(substr($dom[$key]['attribute']['size'], 1));
-								} elseif ($dom[$key]['attribute']['size']{0} == '-') {
-									$dom[$key]['fontsize'] = $dom[($dom[$key]['parent'])]['fontsize'] - intval(substr($dom[$key]['attribute']['size'], 1));
+					switch($dom[$key]['value']){
+						case 'font':
+							// font family
+							if (isset($dom[$key]['attribute']['face'])) {
+								$dom[$key]['fontname'] = $this->getFontFamilyName($dom[$key]['attribute']['face']);
+							}
+							// font size
+							if (isset($dom[$key]['attribute']['size'])) {
+								if ($key > 0) {
+									if ($dom[$key]['attribute']['size']{0} == '+') {
+										$dom[$key]['fontsize'] = $dom[($dom[$key]['parent'])]['fontsize'] + intval(substr($dom[$key]['attribute']['size'], 1));
+									} elseif ($dom[$key]['attribute']['size']{0} == '-') {
+										$dom[$key]['fontsize'] = $dom[($dom[$key]['parent'])]['fontsize'] - intval(substr($dom[$key]['attribute']['size'], 1));
+									} else {
+										$dom[$key]['fontsize'] = intval($dom[$key]['attribute']['size']);
+									}
 								} else {
 									$dom[$key]['fontsize'] = intval($dom[$key]['attribute']['size']);
 								}
-							} else {
-								$dom[$key]['fontsize'] = intval($dom[$key]['attribute']['size']);
 							}
-						}
-					}
-					// force natural alignment for lists
-					if ((($dom[$key]['value'] == 'ul') OR ($dom[$key]['value'] == 'ol') OR ($dom[$key]['value'] == 'dl'))
-						AND (!isset($dom[$key]['align']) OR TCPDF_STATIC::empty_string($dom[$key]['align']) OR ($dom[$key]['align'] != 'J'))) {
-						if ($this->rtl) {
-							$dom[$key]['align'] = 'R';
-						} else {
-							$dom[$key]['align'] = 'L';
-						}
-					}
-					if (($dom[$key]['value'] == 'small') OR ($dom[$key]['value'] == 'sup') OR ($dom[$key]['value'] == 'sub')) {
-						if (!isset($dom[$key]['attribute']['size']) AND !isset($dom[$key]['style']['font-size'])) {
-							$dom[$key]['fontsize'] = $dom[$key]['fontsize'] * K_SMALL_RATIO;
-						}
-					}
-					if (($dom[$key]['value'] == 'strong') OR ($dom[$key]['value'] == 'b')) {
-						$dom[$key]['fontstyle'] .= 'B';
-					}
-					if (($dom[$key]['value'] == 'em') OR ($dom[$key]['value'] == 'i')) {
-						$dom[$key]['fontstyle'] .= 'I';
-					}
-					if ($dom[$key]['value'] == 'u') {
-						$dom[$key]['fontstyle'] .= 'U';
-					}
-					if (($dom[$key]['value'] == 'del') OR ($dom[$key]['value'] == 's') OR ($dom[$key]['value'] == 'strike')) {
-						$dom[$key]['fontstyle'] .= 'D';
-					}
-					if (!isset($dom[$key]['style']['text-decoration']) AND ($dom[$key]['value'] == 'a')) {
-						$dom[$key]['fontstyle'] = $this->htmlLinkFontStyle;
-					}
-					if (($dom[$key]['value'] == 'pre') OR ($dom[$key]['value'] == 'tt')) {
-						$dom[$key]['fontname'] = $this->default_monospaced_font;
-					}
-					if (!empty($dom[$key]['value']) AND ($dom[$key]['value']{0} == 'h') AND (intval($dom[$key]['value']{1}) > 0) AND (intval($dom[$key]['value']{1}) < 7)) {
-						// headings h1, h2, h3, h4, h5, h6
-						if (!isset($dom[$key]['attribute']['size']) AND !isset($dom[$key]['style']['font-size'])) {
-							$headsize = (4 - intval($dom[$key]['value']{1})) * 2;
-							$dom[$key]['fontsize'] = $dom[0]['fontsize'] + $headsize;
-						}
-						if (!isset($dom[$key]['style']['font-weight'])) {
+						break;
+						case 'ul':
+						case 'ol':
+						case 'dl':
+							// force natural alignment for lists
+							if ((!isset($dom[$key]['align']) OR TCPDF_STATIC::empty_string($dom[$key]['align']) OR ($dom[$key]['align'] != 'J'))) {
+								if ($this->rtl) {
+									$dom[$key]['align'] = 'R';
+								} else {
+									$dom[$key]['align'] = 'L';
+								}
+							}
+						break;
+						case 'small':
+						case 'sup':
+						case 'sub':
+							if (!isset($dom[$key]['attribute']['size']) AND !isset($dom[$key]['style']['font-size'])) {
+								$dom[$key]['fontsize'] = $dom[$key]['fontsize'] * K_SMALL_RATIO;
+							}
+						break;
+						case 'strong':
+						case 'b':
 							$dom[$key]['fontstyle'] .= 'B';
-						}
+						break;
+						case 'em':
+						case 'i':
+							$dom[$key]['fontstyle'] .= 'I';
+						break;
+						case 'u':
+							$dom[$key]['fontstyle'] .= 'U';
+						break;
+						case 'del':
+						case 's':
+						case 'strike':
+							$dom[$key]['fontstyle'] .= 'D';
+						break;
+						case 'a':
+							if (!isset($dom[$key]['style']['text-decoration'])) {
+								$dom[$key]['fontstyle'] = $this->htmlLinkFontStyle;
+							}
+						break;
+						case 'pre':
+						case 'tt':
+							$dom[$key]['fontname'] = $this->default_monospaced_font;
+						break;
+						case 'h1':
+						case 'h2':
+						case 'h3':
+						case 'h4':
+						case 'h5':
+						case 'h6':
+							if (!isset($dom[$key]['attribute']['size']) AND !isset($dom[$key]['style']['font-size'])) {
+								$headsize = (4 - intval($dom[$key]['value']{1})) * 2;
+								$dom[$key]['fontsize'] = $dom[0]['fontsize'] + $headsize;
+							}
+							if (!isset($dom[$key]['style']['font-weight'])) {
+								$dom[$key]['fontstyle'] .= 'B';
+							}
+						break;
+						case 'table':
+							$dom[$key]['rows'] = 0; // number of rows
+							$dom[$key]['trids'] = array(); // IDs of TR elements
+							$dom[$key]['thead'] = ''; // table header rows
+						break;
+						case 'tr':
+							$dom[$key]['cols'] = 0;
+							if ($thead) {
+								$dom[$key]['thead'] = true;
+								// rows on thead block are printed as a separate table
+							} else {
+								$dom[$key]['thead'] = false;
+								// store the number of rows on table element
+								++$dom[($dom[$key]['parent'])]['rows'];
+								// store the TR elements IDs on table element
+								array_push($dom[($dom[$key]['parent'])]['trids'], $key);
+							}
+						break;
+						case 'th':
+						case 'td':
+							if (isset($dom[$key]['attribute']['colspan'])) {
+								$colspan = intval($dom[$key]['attribute']['colspan']);
+							} else {
+								$colspan = 1;
+							}
+							$dom[$key]['attribute']['colspan'] = $colspan;
+							$dom[($dom[$key]['parent'])]['cols'] += $colspan;
+						break;
 					}
-					if (($dom[$key]['value'] == 'table')) {
-						$dom[$key]['rows'] = 0; // number of rows
-						$dom[$key]['trids'] = array(); // IDs of TR elements
-						$dom[$key]['thead'] = ''; // table header rows
-					}
-					if (($dom[$key]['value'] == 'tr')) {
-						$dom[$key]['cols'] = 0;
-						if ($thead) {
-							$dom[$key]['thead'] = true;
-							// rows on thead block are printed as a separate table
-						} else {
-							$dom[$key]['thead'] = false;
-							// store the number of rows on table element
-							++$dom[($dom[$key]['parent'])]['rows'];
-							// store the TR elements IDs on table element
-							array_push($dom[($dom[$key]['parent'])]['trids'], $key);
-						}
-					}
-					if (($dom[$key]['value'] == 'th') OR ($dom[$key]['value'] == 'td')) {
-						if (isset($dom[$key]['attribute']['colspan'])) {
-							$colspan = intval($dom[$key]['attribute']['colspan']);
-						} else {
-							$colspan = 1;
-						}
-						$dom[$key]['attribute']['colspan'] = $colspan;
-						$dom[($dom[$key]['parent'])]['cols'] += $colspan;
-					}
+
 					// text direction
 					if (isset($dom[$key]['attribute']['dir'])) {
 						$dom[$key]['dir'] = $dom[$key]['attribute']['dir'];
@@ -17004,7 +17052,15 @@ class TCPDF {
 						}
 					}
 				}
-				$dom[$key]['value'] = stripslashes($this->unhtmlentities($element));
+				$value = stripslashes($this->unhtmlentities($element));;
+				$dom[$key]['value'] = $value;
+
+				if (strlen(trim($value))) {
+					$level_filled[count($level_filled)-1] = true;
+				} else {
+					unset($dom[$key]);
+					$key--;
+				}
 			}
 			++$elkey;
 			++$key;
@@ -17926,7 +17982,11 @@ Putting 1 is equivalent to putting 0 and calling Ln() just after. Default value:
 					$startliney -= (($this->FontSizePt / 0.7) / $this->k);
 				} else {
 					$minstartliney = $startliney;
-					$maxbottomliney = ($this->y + $this->getCellHeight($fontsize / $this->k));
+					if (isset($dom[$key]['attribute']['height'])) {
+						$maxbottomliney = ($this->y + $this->getHTMLUnitToUnits($dom[$key]['attribute']['height'], 0, 'px'));
+					} else {
+						$maxbottomliney = ($this->y + $this->getCellHeight($fontsize / $this->k));
+					}
 				}
 				$startlinepage = $this->page;
 				if (isset($endlinepos) AND (!$pbrk)) {
