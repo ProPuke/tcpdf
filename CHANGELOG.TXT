@@ -1,3 +1,16 @@
+6.0.066 (2014-04-20)
+	- Bug #908 "Linebreak is not considered when getting length of the next string" was fixed.
+
+6.0.065 (2014-04-10)
+	- Bug #905 "RGB percentage color bug in convertHTMLColorToDec()" was fixed.
+
+6.0.064 (2014-04-07)
+	- Header and Footer fonts are now set by default.
+	- Bug #904 "PDF corrupted" was fixed.
+
+6.0.063 (2014-04-03)
+	- Method TCPDF_IMAGES::_parsepng() was fixed to support transparency in Indexed images.
+
 6.0.062 (2014-03-02)
 	- The method startLayer() now accepts the NULL value for the $print parameter to not set the print layer option.
 
