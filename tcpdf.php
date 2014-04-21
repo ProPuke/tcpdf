@@ -16279,8 +16279,6 @@ class TCPDF {
 		$uncollapsabletags = array('br','dd','dl','dt','hr','li','ol','pre','ul','tcpdf','table','thead','tbody','tfoot','tr','td','th');
 		// define self-closing tags
 		$selfclosingtags = array('area','base','basefont','br','hr','input','img','link','meta');
-		// remove all unsupported tags (the line below lists all supported tags)
-		$html = strip_tags($html, '<marker/><a><b><blockquote><body><br><br/><dd><del><div><dl><dt><em><font><form><h1><h2><h3><h4><h5><h6><hr><hr/><i><img><input><label><li><ol><option><p><pre><s><select><small><span><strike><strong><sub><sup><table><tablehead><tcpdf><td><textarea><th><thead><tr><tt><u><ul>');
 		//replace some blank characters
 		$html = preg_replace('/<pre/', '<xre', $html); // preserve pre tag
 		$html = preg_replace('/<(table|tr|td|th|tcpdf|blockquote|dd|div|dl|dt|form|h1|h2|h3|h4|h5|h6|br|hr|li|ol|ul|p)([^\>]*)>[\n\r\t]+/', '<\\1\\2>', $html);
@@ -16400,6 +16398,10 @@ class TCPDF {
 		++$key;
 		$level = array();
 		$level_filled = array();
+		$level_table = array();
+		$level_table_row = array();
+		$current_table = false;
+		$current_table_row = false;
 		array_push($level, 0); // root
 		array_push($level_filled, false);
 		while ($elkey < $maxel) {
@@ -16455,9 +16457,19 @@ class TCPDF {
 					if (isset($dom[($dom[($dom[$key]['parent'])]['parent'])]['listtype'])) {
 						$dom[$key]['listtype'] = $dom[($dom[($dom[$key]['parent'])]['parent'])]['listtype'];
 					}
+					switch($dom[$key]['value']){
+						case 'table':
+							array_pop($level_table);
+							$current_table = end($level_table);
+						break;
+						case 'tr':
+							array_pop($level_table_row);
+							$current_table_row = end($level_table_row);
+						break;
+					}
 					// set the number of columns in table tag
-					if (($dom[$key]['value'] == 'tr') AND (!isset($dom[($dom[($dom[$key]['parent'])]['parent'])]['cols']))) {
-						$dom[($dom[($dom[$key]['parent'])]['parent'])]['cols'] = $dom[($dom[$key]['parent'])]['cols'];
+					if (($dom[$key]['value'] == 'tr') AND (!isset($dom[$current_table]['cols']))) {
+						$dom[$current_table]['cols'] = $dom[($dom[$key]['parent'])]['cols'];
 					}
 					if (($dom[$key]['value'] == 'td') OR ($dom[$key]['value'] == 'th')) {
 						$dom[($dom[$key]['parent'])]['content'] = $csstagarray;
@@ -16473,11 +16485,11 @@ class TCPDF {
 					}
 					// store header rows on a new table
 					if (($dom[$key]['value'] == 'tr') AND ($dom[($dom[$key]['parent'])]['thead'] === true)) {
-						if (TCPDF_STATIC::empty_string($dom[($dom[($dom[$key]['parent'])]['parent'])]['thead'])) {
-							$dom[($dom[($dom[$key]['parent'])]['parent'])]['thead'] = $csstagarray.$a[$dom[($dom[($dom[$key]['parent'])]['parent'])]['elkey']];
+						if (TCPDF_STATIC::empty_string($dom[$current_table]['thead'])) {
+							$dom[$current_table]['thead'] = $csstagarray.$a[$dom[$current_table]['elkey']];
 						}
 						for ($i = $dom[$key]['parent']; $i <= $key; ++$i) {
-							$dom[($dom[($dom[$key]['parent'])]['parent'])]['thead'] .= $a[$dom[$i]['elkey']];
+							$dom[$current_table]['thead'] .= $a[$dom[$i]['elkey']];
 						}
 						if (!isset($dom[($dom[$key]['parent'])]['attribute'])) {
 							$dom[($dom[$key]['parent'])]['attribute'] = array();
@@ -16944,6 +16956,7 @@ class TCPDF {
 							$dom[$key]['rows'] = 0; // number of rows
 							$dom[$key]['trids'] = array(); // IDs of TR elements
 							$dom[$key]['thead'] = ''; // table header rows
+							array_push($level_table, $current_table = $key);
 						break;
 						case 'tr':
 							$dom[$key]['cols'] = 0;
@@ -16953,10 +16966,11 @@ class TCPDF {
 							} else {
 								$dom[$key]['thead'] = false;
 								// store the number of rows on table element
-								++$dom[($dom[$key]['parent'])]['rows'];
+								++$dom[$current_table]['rows'];
 								// store the TR elements IDs on table element
-								array_push($dom[($dom[$key]['parent'])]['trids'], $key);
+								array_push($dom[$current_table]['trids'], $key);
 							}
+							array_push($level_table_row, $current_table_row = $key);
 						break;
 						case 'th':
 						case 'td':
@@ -16966,7 +16980,7 @@ class TCPDF {
 								$colspan = 1;
 							}
 							$dom[$key]['attribute']['colspan'] = $colspan;
-							$dom[($dom[$key]['parent'])]['cols'] += $colspan;
+							$dom[$current_table_row]['cols'] += $colspan;
 						break;
 					}
 
