@@ -16961,6 +16961,11 @@ class TCPDF {
 							$dom[$key]['thead'] = ''; // table header rows
 							array_push($level_table, $current_table = $key);
 						break;
+						case 'tbody':
+							if (!isset($dom[$key]['attribute']['cellpadding'])) {
+								$dom[$key]['attribute']['cellpadding'] = $dom[$parentkey]['attribute']['cellpadding'];
+							}
+						break;
 						case 'tr':
 							$dom[$key]['cols'] = 0;
 							if ($thead) {
