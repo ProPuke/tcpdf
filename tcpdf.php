@@ -18746,7 +18746,7 @@ Putting 1 is equivalent to putting 0 and calling Ln() just after. Default value:
 					$hbz = $this->getCellHeight($this->FontSize);
 				}
 			}
-			if ($key !== $tag['parent'] && isset($dom[($key - 1)]) && $dom[($key - 1)]['block']) {
+			if ($tag['value'] !== 'br' && $key !== $tag['parent'] && isset($dom[($key - 1)]) && $dom[($key - 1)]['block']) {
 				// fix vertical space after blocks
 				$hbz = 0;
 			}
