@@ -526,6 +526,22 @@ class TCPDF {
 	protected $starting_page_number = 1;
 
 	/**
+	 * The left-top (or right-top for RTL) corner X coordinate of last inserted image.
+	 * @since 2002-07-31
+	 * @author Nicola Asuni
+	 * @protected
+	 */
+	protected $img_lt_x;
+
+	/**
+	 * The left-top corner Y coordinate of last inserted image.
+	 * @since 2002-07-31
+	 * @author Nicola Asuni
+	 * @protected
+	 */
+	protected $img_lt_y;
+
+	/**
 	 * The right-bottom (or left-bottom for RTL) corner X coordinate of last inserted image.
 	 * @since 2002-07-31
 	 * @author Nicola Asuni
@@ -3344,6 +3360,24 @@ class TCPDF {
 	 */
 	public function setPrintFooter($val=true) {
 		$this->print_footer = $val ? true : false;
+	}
+
+	/**
+	 * Return the left-top (or right-top for RTL) corner X coordinate of last inserted image
+	 * @return float
+	 * @public
+	 */
+	public function getImageLTX() {
+		return $this->img_lt_x;
+	}
+
+	/**
+	 * Return the left-top (or right-top for RTL) corner Y coordinate of last inserted image
+	 * @return float
+	 * @public
+	 */
+	public function getImageLTY() {
+		return $this->img_lt_y;
 	}
 
 	/**
@@ -7119,6 +7153,7 @@ class TCPDF {
 			$info['i'] = $this->setImageBuffer($file, $info);
 		}
 		// set alignment
+		$this->img_lt_y = $y;
 		$this->img_rb_y = $y + $h;
 		// set alignment
 		if ($this->rtl) {
@@ -7131,6 +7166,7 @@ class TCPDF {
 			} else {
 				$ximg = $x - $w;
 			}
+			$this->img_lt_x = $ximg + $w;
 			$this->img_rb_x = $ximg;
 		} else {
 			if ($palign == 'L') {
@@ -7142,6 +7178,7 @@ class TCPDF {
 			} else {
 				$ximg = $x;
 			}
+			$this->img_lt_x = $ximg;
 			$this->img_rb_x = $ximg + $w;
 		}
 		if ($ismask OR $hidden) {
